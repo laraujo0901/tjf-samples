@@ -1,349 +1,430 @@
-# API Context
+# Exemplo de uso do componente API Context
 
-# Contexto
+## Contexto
 
-Para exemplificar a biblioteca __API Context__ vamos criar uma _API REST_ que possa trazer informações dos principais __Jedis__ do universo __Star Wars__. Esta _API_ precisa retornar as informações no formato `JSON` e deve seguir os padrões do [Guia de Implementação das APIs TOTVS][guia-api-totvs].
+Para exemplificar o uso da biblioteca **API Context** vamos criar uma API REST que possa trazer informações dos principais **Jedis** do universo **Star Wars**.
 
-> É muito importante que, antes de iniciar o desenvolvimento deste _sample_, você tenha lido o [Guia de Implementação das APIs TOTVS][guia-api-totvs].
+As informações devem ser retornadas no formato `JSON` e seguir os padrões do [guia de implementação das APIs TOTVS][guia-api-totvs].
 
+## Começando
 
-# Começando com TJF API Context
+Para criação deste exemplo vamos iniciar a explicação a partir de um projeto Spring já criado, caso você não possua um projeto criado basta acessar o [Spring initializr](https://start.spring.io/) e criar o projeto. Na geração da aplicação adicione como dependência as bibliotecas **Spring WEB**, **Spring Data JPA**, **H2** e o **Lombok**.
 
-Para criação deste exemplo, vamos iniciar a explicação a partir de um projeto [Spring][spring] já criado, caso você não possua este projeto basta acessar o [Spring Initializr][spring-initializr] para criá-lo.
+### Dependências
 
-
-## Dependências
-
-Além da dependência do [Spring][spring], para utilização do módulo __API Context__ é necessário inserir as seguintes dependências no arquivo `pom.xml` do projeto:
+Além das dependências do Spring mencionadas acima, para utilização do componente é necessário alterar o `parent` da aplicação no arquivo `pom.xml`:
 
 ```xml
 <parent>
   <groupId>com.totvs.tjf</groupId>
   <artifactId>tjf-boot-starter</artifactId>
-  <version>1.10.0-RELEASE</version>
+  <version>2.6.0-RELEASE</version>
 </parent>
 ```
 
-```xml
-<!-- Spring -->
-<dependency>
-  <groupId>org.springframework.boot</groupId>
-  <artifactId>spring-boot-starter-web</artifactId>
-</dependency>
+E incluir as dependências abaixo:
 
+```xml
 <!-- TJF -->
 <dependency>
   <groupId>com.totvs.tjf</groupId>
   <artifactId>tjf-api-core</artifactId>
 </dependency>
+
+<dependency>
+  <groupId>com.totvs.tjf</groupId>
+  <artifactId>tjf-api-jpa</artifactId>
+</dependency>
 ```
 
+> Como o **API Context** fornece apenas implementações contratuais, as execuções destas implementações ficam nas bibliotecas **API Core** e **API JPA**.
 
-## Criando os dados
+Vamos adicionar também o repositório Maven de _release_ do TJF:
 
-Para nosso exemplo utilizaremos um arquivo `JSON` para leitura das informações, portanto será necessário criar dentro da pasta `src/main/resources` o arquivo com o nome e conteúdo abaixo:
-
-_Jedis.json_
-
-```json
-[
-  {
-    "name": "Qui-Gon Jinn",
-    "gender": "male",
-    "movies": [1]
-  },
-  {
-    "name": "Obi-Wan Kenobi",
-    "gender": "male",
-    "movies": [1, 2, 3, 4, 5, 6]
-  },
-  {
-    "name": "Anakin Skywalker",
-    "gender": "male",
-    "movies": [1, 2, 3]
-  },
-  {
-    "name": "Yoda",
-    "gender": "male",
-    "movies": [1, 2, 3, 4, 5, 6]
-  },
-  {
-    "name": "Mace Windu",
-    "gender": "male",
-    "movies": [1, 2, 3]
-  },
-  {
-    "name": "Count Dooku",
-    "gender": "male",
-    "movies": [2, 3]
-  },
-  {
-    "name": "Luke Skywalker",
-    "gender": "male",
-    "movies": [4, 5, 6, 7, 8]
-  },
-  {
-    "name": "Rey",
-    "gender": "female",
-    "movies": [7, 8]
-  }
-]
+```xml
+<repositories>
+  <repository>
+    <id>central-release</id>
+    <name>TOTVS Java Framework: Releases</name>
+    <url>http://maven.engpro.totvs.com.br/artifactory/libs-release/</url>
+  </repository>
+</repositories>
 ```
 
+### Configuração
 
-## Modelos de dados
+Para que a aplicação possa comunicar-se com o banco de dados, precisamos alterar sua configuração no arquivo `application.yaml` da pasta `src/main/resources`.
 
-Antes de iniciar com a criação da _API REST_, precisaremos criar a classe com o modelo de dados que irá reprensentar a estrutura das informações utilizadas. Vamos criar o pacote `br.com.star.wars.model`, que irá agrupar os modelos de dados, contendo a classe que irá representar as informações de `Jedi`:
+**`application.yaml`**
 
-_Jedi.java_
+```yaml
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:starwarsdb
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+```
+
+## Modelo de dados
+
+Primeiramente precisamos habilitar nossa aplicação para utilizar o repositório `ApiJpaRepository` que facilita as consultas respeitando o [guia de implementação das APIs TOTVS][guia-api-totvs].
+
+Vamos então incluir a anotação `@EnableJpaRepositories` e defini-lo como `"repositoryBaseClass"` na classe principal da aplicação:
 
 ```java
-public class Jedi {
-  private String name;
-  private String gender;
-  private List<Integer> movies;
+@SpringBootApplication
+@EnableJpaRepositories(repositoryBaseClass = ApiJpaRepositoryImpl.class)
+public class ApiContextApplication {
 
-  public String getName() {
-    return this.name;
-  }
-
-  public void setName(String name) {
-    this.name = name;
-  }
-
-  public String getGender() {
-    return this.gender;
-  }
-
-  public void setGender(String gender) {
-    this.gender = gender;
-  }
-
-  public List<Integer> getMovies() {
-    return this.movies;
-  }
-
-  public void setMovies(List<Integer> movies) {
-    this.movies = movies;
+  public static void main(String[] args) {
+    SpringApplication.run(ApiContextApplication.class, args);
   }
 
 }
 ```
 
+Depois podemos iniciar a criação da classe da entidade **Jedi**:
 
-# Criando a API REST
+**`Jedi.java`**
 
-Para iniciar, vamos criar o pacote `br.com.star.wars.api` que irá agrupar as _APIs_. Lembrando que, como o TOTVS Java Framework utiliza o framework [Spring][spring], as classes de serviços _REST_ devem ser anotadas com [`@RestController`][@RestController].
+```java
+@Getter
+@Setter
+@NoArgsConstructor
+@Entity
+@Table(name = "jedi")
+public class Jedi {
 
-Vamos desenvolver a _API_ responsável por retornar a lista dos principais Jedis (que serão obtidos através do arquivo `Jedis.json` que criamos anteriormente), criando a classe `JediController`, com o conteúdo abaixo:
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private int id;
 
-_JediController.java_
+  @NotNull
+  private String name;
+
+  @NotNull
+  private String gender;
+
+}
+```
+
+E criaremos também a interface de repositório desta entidade:
+
+**`JediRepository.java`**
+
+```java
+@Repository
+public interface JediRepository extends JpaRepository<Jedi, Integer>, ApiJpaRepository<Jedi> {}
+```
+
+## API REST
+
+Com as classe da entidade e repositório criadas, iniciaremos o desenvolvimento da API REST responsável pela consulta e manutenção de Jedis. É importante que a nossa classe seja anotada com `@ApiGuideline` para que as respostas adequem-se ao [guia de implementação das APIs TOTVS][guia-api-totvs].
+
+### Adicionando um novo Jedi
+
+Primeiramente vamos desenvolver o método responsável por criar um novo Jedi, a partir de uma requisição `POST`:
+
+**`JediController.java`**
 
 ```java
 @RestController
 @RequestMapping(path = "/api/v1/jedis", produces = MediaType.APPLICATION_JSON_VALUE)
-@ApiGuideline(ApiGuidelineVersion.v1)
+@ApiGuideline(ApiGuidelineVersion.V2)
 public class JediController {
 
-  @GetMapping
-  public List<Jedi> getAll() throws IOException {
-    // Recupera o arquivos JSON com a lista de Jedis.
-    ClassLoader classLoader = ClassLoader.getSystemClassLoader();
-    File file = new File(classLoader.getResource("Jedis.json").getFile());
+  @Autowired
+  private JediRepository jediRepo;
 
-    // Converte o JSON recuperado para List<Jedi>.
-    ObjectMapper mapper = new ObjectMapper();
-    List<Jedi> jedis = mapper.readValue(file,
-        mapper.getTypeFactory().constructCollectionType(List.class, Jedi.class));
-
-    return jedis;
+  @PostMapping
+  public Jedi add(@RequestBody Jedi jedi) {
+    return jediRepo.saveAndFlush(jedi);
   }
 
 }
 ```
 
-> Para indicar que nossa _API REST_ deve seguir os padrões do [Guia de Implementação das APIs TOTVS][guia-api-totvs] e interceptadas pelo __API Context__, a classe deve conter a anotação [`@ApiGuideline`][apiguideline] juntamente com a informação da versão do Guia.
+Para testar vamos efetuar uma requisição com o corpo abaixo:
 
+```http
+POST /api/v1/jedis HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
 
-## Padronizando o conteúdo de resposta
+{
+  "name": "Luke Skywalker",
+  "gender": "male"
+}
+```
 
-Ao analisar a classe `JediController`, podemos perceber que esta _API_ possui apenas um método `GET`, responsável por retornar todos os `Jedis`, acessível a partir da URL `/api/v1/jedis`. Porém, o conteúdo das informações que serão retornadas ainda não seguem o padrão do [Guia de Implementação das APIs TOTVS][guia-api-totvs] (com os atributos `hasNext` e `items`):
+E a resposta da requisição deve ser semelhante ao conteúdo abaixo:
 
-_http://localhost:8080/api/v1/jedis_
+```json
+{
+  "id": 1,
+  "name": "Luke Skywalker",
+  "gender": "male"
+}
+```
+
+### Consultando um Jedi
+
+Vamos criar agora o método que permite recuperar um Jedi pelo seu código:
+
+```java
+@GetMapping("/{id}")
+public Jedi getOne(@PathVariable(required = true) int id) {
+  return jediRepo.findById(id).get();
+}
+```
+
+Para testar vamos efetuar uma requisição conforme abaixo:
+
+```http
+GET /api/v1/jedis/1 HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+```
+
+E a resposta da requisição deve ser semelhante ao conteúdo abaixo:
+
+```json
+{
+  "id": 1,
+  "name": "Luke Skywalker",
+  "gender": "male"
+}
+```
+
+#### Tratamento de erros
+
+Após criado o método que permite recuperar o Jedi pelo seu respectivo código, será necessário tratar possíveis inconsistências que podem ocorrer se o usuário informar um código de Jedi inexistente, por exemplo.
+
+Conforme o [guia de implementação das APIs TOTVS][guia-api-totvs], o correto neste caso é que a resposta seja uma mensagem de erro tratada e status HTTP `404 Not Found`. Para isto vamos criar uma `Exception` específica e nesta utilizar a anotação `@ApiError`:
+
+**`JediNotFoundException.java`**
+
+```java
+@ApiError(status = HttpStatus.NOT_FOUND, value = "JediNotFoundException")
+public class JediNotFoundException extends RuntimeException {
+
+  private static final long serialVersionUID = -52548244535504794L;
+
+  @ApiErrorParameter
+  private final int jediId;
+
+  public JediNotFoundException(int jediId) {
+    this.jediId = jediId;
+  }
+
+  public int getJediId() {
+    return jediId;
+  }
+
+}
+```
+
+> É possível também utilizar a anotação `@ApiNotFound` sem que seja necessário informar o status HTTP.
+
+Vamos precisar criar também o arquivo `messages.properties` na pasta `src/main/resources/i18n/exception` contendo a mensagem de erro que será utilizada na resposta de erro:
+
+```properties
+JediNotFoundException.message = Jedi não encontrado
+JediNotFoundException.detail = Jedi de código {0} não foi encontrado
+```
+
+Agora podemos alterar nossa _API REST_ para lançar a exceção `JediNotFoundException` caso informado um código de Jedi inexistente:
+
+```java
+@GetMapping("/{id}")
+public Jedi getOne(@PathVariable(required = true) int id) {
+  return jediRepo.findById(id).orElseThrow(() -> {
+    throw new JediNotFoundException(id);
+  });
+}
+```
+
+Se executarmos uma requisição com um código de Jedi inexistente conforme abaixo:
+
+```http
+GET /api/v1/jedis/99 HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+```
+
+A resposta da requisição terá a mensagem de erro com o status `404 Not Found`:
+
+```json
+{
+  "code": "JediNotFoundException",
+  "message": "Jedi não encontrado",
+  "detailedMessage": "Jedi de código 99 não foi encontrado"
+}
+```
+
+#### Filtro de Conteúdo de Resposta
+
+Conforme definição do [guia de implementação das APIs TOTVS][guia-api-totvs], todo _endpoint_ deve permitir filtrar o conteúdo `JSON` de retorno através do parâmetro de URL `fields`. Para habilitar esta funcionalidade, precisamos incluir uma nova propriedade no arquivo de configuração da aplicação `application.yaml`:
+
+```yml
+tjf:
+  api:
+    filter:
+      fields:
+        enabled: true
+```
+
+Se executarmos a requisição abaixo:
+
+```http
+GET /api/v1/jedis/1?fields=name HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+```
+
+A resposta trará apenas os atributos informados:
+
+```json
+{
+  "name": "Luke Skywalker"
+}
+```
+
+### Listando Jedis
+
+Já criamos o método que retorna um determinado Jedi pelo seu código, vamos então criar um método que nos retorne a lista de Jedis. Para este método será utilizada a classe `ApiCollectionResponse` que padroniza a resposta conforme definido pelo [guia de implementação das APIs TOTVS][guia-api-totvs]:
+
+```java
+@GetMapping
+public ApiCollectionResponse<Jedi> getAll() {
+  return ApiCollectionResponse.from(jediRepo.findAll());
+}
+```
+
+Antes de executarmos o método acima, vamos criar mais alguns Jedis:
+
+```http
+POST /api/v1/jedis HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+
+{
+  "name": "Obi-Wan Kenobi",
+  "gender": "male"
+}
+```
+
+```http
+POST /api/v1/jedis HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+
+{
+  "name": "Yoda",
+  "gender": "male"
+}
+```
+
+```http
+POST /api/v1/jedis HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+
+{
+  "name": "Rey",
+  "gender": "female"
+}
+```
+
+Após criarmos os registros acima, vamos executar a requisição abaixo:
 
 ```http
 GET /api/v1/jedis HTTP/1.1
 Host: localhost:8080
 Content-Type: application/json
-
-[
-  {
-    "name": "Qui-Gon Jinn",
-    "gender": "male",
-    "movies": [1]
-  },
-  ...
-]
 ```
 
-Vamos então alterar o méotodo acima para retornar e utilizar a classe [`ApiCollectionResponse`][apicollectionresponse], da biblioteca [__API Context__ (`com.totvs.tjf.tjf-api-context`)][tjf-api-context], que será responsável por padronizar a resposta do método `getAll()`.
+O retorno será a lista de todos os Jedis criados:
 
-_getAll()_
-
-```java
-@GetMapping
-public ApiCollectionResponse<Jedi> getAll() throws IOException {
-  // Recupera o arquivos JSON com a lista de Jedis.
-  ClassLoader classLoader = ClassLoader.getSystemClassLoader();
-  File file = new File(classLoader.getResource("Jedis.json").getFile());
-
-  // Converte o JSON recuperado para List<Jedi>.
-  ObjectMapper mapper = new ObjectMapper();
-  List<Jedi> jedis = mapper.readValue(file,
-      mapper.getTypeFactory().constructCollectionType(List.class, Jedi.class));
-
-  return ApiCollectionResponse.of(jedis);
-}
-```
-
-Com as alterações acima, ao executar nosso serviço _REST_, o retorno virá formatado nos padrões do [Guia de Implementação das APIs TOTVS][guia-api-totvs]:
-
-_http://localhost:8080/api/v1/jedis_
-
-```http
-GET /api/v1/jedis HTTP/1.1
-Host: localhost:8080
-Content-Type: application/json
-
+```json
 {
   "hasNext": false,
   "items": [
     {
-      "name": "Qui-Gon Jinn",
-      "gender": "male",
-      "movies": [1]
-    },
-    ...
-  ]
-}
-```
-
-De acordo com o [Guia de Implementação das APIs TOTVS][guia-api-totvs], além da formatação do conteúdo das respostas é necessário que as _APIs REST_ possuam algumas funcionalidades padrões como ordenação e restrição de campos.
-
-
-### Ordenação
-
-Vamos então alterar nosso método para possibilitar a ordenação dos resultados. Para isso será necessário utilizar a classe [`ApiSortRequest`][apisortrequest], da biblioteca [__API Context__ (`com.totvs.tjf.tjf-api-context`)][tjf-api-context], responsável por nos retornar os atributos e a direção de ordenação informada na requisição:
-
-_getAll()_
-
-```java
-@GetMapping
-public ApiCollectionResponse<Jedi> getAll(ApiSortRequest sort) throws IOException {
-  // Recupera o arquivos JSON com a lista de Jedis.
-  ClassLoader classLoader = ClassLoader.getSystemClassLoader();
-  File file = new File(classLoader.getResource("Jedis.json").getFile());
-
-  // Converte o JSON recuperado para List<Jedi>.
-  ObjectMapper mapper = new ObjectMapper();
-  List<Jedi> jedis = mapper.readValue(file,
-      mapper.getTypeFactory().constructCollectionType(List.class, Jedi.class));
-
-  // Ordena a lista de Jedis.
-  this.sortList(jedis, sort.getSort());
-
-  return ApiCollectionResponse.of(jedis);
-}
-```
-
-Vamos agora desenvolver o método `sortList` que será responsável por ordenar nossa lista de Jedis. Além deste, vamos desenvolver outros dois métodos; `sortListByName` e `sortListByGender` que serão responsáveis por ordenar a lista de Jedis por nome e por gênero, respectivamente.
-
-_sortList()_, _sortListByName()_ e _sortListByGender()_
-
-```java
-private void sortList(List<Jedi> jedis, Map<String, ApiSortDirection> sort) {
-  // Converte o Map de ordenação para List, assim poderemos navegar entre
-  // a lista de valores de forma reversa para aplicar a ordenação na
-  // lista de Jedis.
-  List<Map.Entry<String, ApiSortDirection>> keys;
-  keys = new ArrayList<Map.Entry<String, ApiSortDirection>>(sort.entrySet());
-
-  for (int i = keys.size() - 1; i >= 0; i--) {
-    ApiSortDirection direction = keys.get(i).getValue();
-
-    switch (keys.get(i).getKey()) {
-    case "name":
-      this.sortListByName(jedis, direction);
-      break;
-    case "gender":
-      this.sortListByGender(jedis, direction);
-      break;
-    }
-  }
-}
-
-private void sortListByName(List<Jedi> jedis, ApiSortDirection direction) {
-  Comparator<Jedi> compareByName = (Jedi j1, Jedi j2) -> j1.getName().compareTo(j2.getName());
-
-  if (direction == ApiSortDirection.ASC) {
-    jedis.sort(compareByName);
-  } else {
-    jedis.sort(compareByName.reversed());
-  }
-}
-
-private void sortListByGender(List<Jedi> jedis, ApiSortDirection direction) {
-  Comparator<Jedi> compareByGender = (Jedi j1, Jedi j2) -> j1.getGender().compareTo(j2.getGender());
-
-  if (direction == ApiSortDirection.ASC) {
-    jedis.sort(compareByGender);
-  } else {
-    jedis.sort(compareByGender.reversed());
-  }
-}
-```
-
-Adicionando os métodos acima, ao executar nosso serviço _REST_, o retorno virá ordenado pelos campos informados na requisição:
-
-_http://localhost:8080/api/v1/jedis?order=name,-gender_
-
-```http
-GET /api/v1/jedis?order=name,-gender HTTP/1.1
-Host: localhost:8080
-Content-Type: application/json
-
-{
-  "hasNext": false,
-  "items": [
-    {
-      "name": "Anakin Skywalker",
-      ...
-    },
-    {
-      "name": "Count Dooku",
-      ...
-    },
-    {
+      "id": 1,
       "name": "Luke Skywalker",
-      ...
+      "gender": "male"
     },
-    ...
+    {
+      "id": 2,
+      "name": "Obi-Wan Kenobi",
+      "gender": "male"
+    },
+    {
+      "id": 3,
+      "name": "Yoda",
+      "gender": "male"
+    },
+    {
+      "id": 4,
+      "name": "Rey",
+      "gender": "female"
+    }
   ]
 }
 ```
 
-# Isso é tudo pessoal!
+#### Paginação, Ordenação e Filtro de Conteúdo
 
-Com isso terminamos nosso exemplo, fique a vontade para incrementar o exemplo utilizando todos recursos proposto pelo componente __API Context__, mandar sugestões e melhorias para o projeto TJF.
+Conforme o [guia de implementação das APIs TOTVS][guia-api-totvs] todos os _endpoints_ que retornam uma lista de registros devem suportar:
 
-> O conteúdo deste exemplo está em nosso repositório no [GitHub][github].
+- paginação através dos parâmetros de URL `page` (representando a página solicitada) e `pageSize` (representando a quantidade de registros por página). Se não informados, os parâmetros terão valor 1 para `page` e 25 para `pageSize`. Exemplo: `/jedis?page=2&pageSize=3`;
 
-[tjf-api-context]: https://tjf.totvs.com.br/wiki/tjf-api-context
+- ordenação de conteúdo através do parâmetro `order`, de forma ascendente com o sinal de `+` e descendente com o sinal de `-` a frente do atributo que será ordenado (por padrão, se não informado o sinal, será considerado sempre ordenação ascendente). Exemplo: `/jedis?order=-name`;
+
+- filtro de conteúdo de resposta através do parâmetro de URL `fields`. Exemplo: `/jedis?fields=name`.
+
+Para facilitar a execução das funcionalidades acima durante a pesquisa dos registros, vamos alterar o método `getAll` da nossa _API_ e incluir os objetos das classes `ApiFieldRequest`, `ApiPageRequest` e `ApiSortRequest`, respectivamente responsáveis por recuperar os parâmetros de filtro de conteúdo de resposta, paginação e ordenação da requisição.
+
+Também vamos utilizar o método `findAllProjected` do repositório, que facilita a consulta de registros utilizando os objetos acima:
+
+```java
+@GetMapping
+public ApiCollectionResponse<Jedi> getAll(ApiFieldRequest field, ApiPageRequest page, ApiSortRequest sort) {
+  return ApiCollectionResponse.from(jediRepo.findAllProjected(field, page, sort));
+}
+```
+
+Para testar vamos efetuar uma requisição definindo uma paginação, ordenação e filtrando o conteúdo:
+
+```http
+GET /api/v1/jedis?page=2&pageSize=2&order=-name&fields=name HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+```
+
+Resposta:
+
+```json
+{
+  "hasNext": true,
+  "items": [
+    {
+      "name": "Rey"
+    },
+    {
+      "name": "Obi-Wan Kenobi"
+    }
+  ]
+}
+```
+
+## Que a força esteja com você!
+
+Com isso terminamos nosso exemplo, fique a vontade para incrementar o exemplo utilizando todos os recursos proposto pelo componente **API Context**, caso necessário utilize nossa [documentação](https://tjf.totvs.com.br/wiki/tjf-api-context) e fique a vontade para mandar sugestões e melhorias para o projeto [TJF](https://tjf.totvs.com.br/).
+
 [guia-api-totvs]: http://tdn.totvs.com/x/nDUxE
-[spring]: https://spring.io
-[spring-initializr]: https://start.spring.io
-[@RestController]: https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/bind/annotation/RestController.html
-[apiguideline]: https://tjf.totvs.com.br/wiki/tjf-api-context#estereotipos
-[apicollectionresponse]: https://tjf.totvs.com.br/wiki/tjf-api-context#objetos-de-transferencia
-[apisortrequest]: https://tjf.totvs.com.br/wiki/tjf-api-context#objetos-de-transferencia
-[github]: https://github.com/totvs/tjf-api-context-sample
